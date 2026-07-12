@@ -1,0 +1,929 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  Check, 
+  Sparkles, 
+  ArrowRight, 
+  RotateCcw,
+  Sliders,
+  DollarSign,
+  TrendingUp,
+  Cpu,
+  Database,
+  ChevronDown,
+  AlertCircle,
+  HelpCircle,
+  PhoneCall,
+  Calendar,
+  Layers,
+  FileText,
+  User,
+  ShieldCheck,
+  Activity,
+  AlertOctagon
+} from 'lucide-react';
+
+const TRANSLATIONS = {
+  En: {
+    logoPrefix: "Bon",
+    logoSuffix: "Telco",
+    greeting: "Churn Analysis Form",
+    subtitle: "Complete your user telemetry profile. Each input updates the ML predictor weights instantly.",
+    nextStep: "Next step",
+    backStep: "Previous step",
+    calculate: "Evaluate Churn Risk",
+    reset: "Analyze Another Subscriber",
+    contactSupport: "Need telemetry support? Contact the data team at",
+    allRights: "All rights reserved bontelco tech 2026",
+    step: "Step",
+    of: "of",
+    resultTitle: "Prediction Result",
+    glassTitle: "Explainable ML models are the gold standard for subscriber retention",
+    glassSub: "Based on real-time sample training parameters, this portal outputs instant risk probability metrics and lists dynamic dataset weights."
+  },
+  Es: {
+    logoPrefix: "Bon",
+    logoSuffix: "Telco",
+    greeting: "Formulario de Baja",
+    subtitle: "Complete el perfil del usuario. Cada parámetro actualiza instantáneamente el modelo predictivo.",
+    nextStep: "Siguiente paso",
+    backStep: "Paso anterior",
+    calculate: "Evaluar riesgo de baja",
+    reset: "Analizar otro cliente",
+    contactSupport: "¿Soporte de telemetría? Contacte al equipo en",
+    allRights: "Todos los derechos reservados bontelco tech 2026",
+    step: "Paso",
+    of: "de",
+    resultTitle: "Resultado del Modelo",
+    glassTitle: "El modelado predictivo es la mejor estrategia de retención",
+    glassSub: "Basándose en los pesos del conjunto de datos, este panel genera inmediatamente la probabilidad de riesgo."
+  },
+  Fr: {
+    logoPrefix: "Bon",
+    logoSuffix: "Telco",
+    greeting: "Formulaire d'Attrition",
+    subtitle: "Complétez le profil télémétrique. Chaque variable ajuste instantanément le modèle prédictif.",
+    nextStep: "Étape suivante",
+    backStep: "Étape précédente",
+    calculate: "Évaluer l'attrition",
+    reset: "Analyser un autre abonné",
+    contactSupport: "Besoin d'aide télémétrique ? Contactez le support sur",
+    allRights: "Tous droits réservés bontelco tech 2026",
+    step: "Étape",
+    of: "sur",
+    resultTitle: "Résultat Prédictif",
+    glassTitle: "Le ciblage explicable est la référence absolue pour fidéliser",
+    glassSub: "À partir des poids calculés du dataset, ce portail produit des probabilités de risque et des recommandations."
+  }
+};
+
+export default function App() {
+  const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+  const [lang, setLang] = useState('En');
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [step, setStep] = useState(1);
+  const [animateCard, setAnimateCard] = useState(false);
+  
+  // Feature States mapping the user's columns exactly
+  const [customerID, setCustomerID] = useState("0");
+  const [age, setAge] = useState(0);
+  const [gender, setGender] = useState("0");
+  const [tenure, setTenure] = useState(0);
+  const [usageFrequency, setUsageFrequency] = useState(0);
+  const [supportCalls, setSupportCalls] = useState(0);
+  const [paymentDelay, setPaymentDelay] = useState(0);
+  const [subscriptionType, setSubscriptionType] = useState("0");
+  const [contractLength, setContractLength] = useState("0");
+  const [totalSpend, setTotalSpend] = useState(0);
+  const [lastInteraction, setLastInteraction] = useState(0);
+  
+  const [groundTruth, setGroundTruth] = useState(-1); 
+  const [backendResult, setBackendResult] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [apiError, setApiError] = useState("");
+  const canvasRef = useRef(null);
+
+  const computeChurnProbability = () => {
+    let score = 30; // Baseline bias weight
+
+    // 1. Contract Length Weight
+    if (contractLength === "Monthly") score += 25;
+    else if (contractLength === "Quarterly") score += 8;
+    else if (contractLength === "Annual") score -= 15;
+
+    // 2. Payment Delay Weight
+    if (paymentDelay > 20) score += 22;
+    else if (paymentDelay > 10) score += 10;
+    else score -= 8;
+
+    // 3. Support Calls Weight
+    if (supportCalls > 6) score += 20;
+    else if (supportCalls > 3) score += 12;
+    else score -= 10;
+
+    // 4. Tenure Length
+    if (tenure < 12) score += 15;
+    else if (tenure > 36) score -= 18;
+
+    // 5. Usage Frequency
+    if (usageFrequency < 12) score += 12;
+    else if (usageFrequency > 22) score -= 8;
+
+    // 6. Age & Subscription tier
+    if (subscriptionType === "Basic") score += 5;
+    else if (subscriptionType === "Premium") score -= 5;
+
+    if (age < 26) score += 4; 
+
+    // Boundaries containment
+    return Math.min(99, Math.max(1, Math.round(score)));
+  };
+
+  const fallbackRisk = computeChurnProbability();
+  const backendChurnProbability = backendResult ? Number(backendResult.churn_probability) : 0;
+  const displayRisk = backendResult ? backendChurnProbability : fallbackRisk;
+  const displayPredictionClass = backendResult ? (backendResult.prediction === "Churn" ? 1 : 0) : (fallbackRisk >= 50 ? 1 : 0);
+  const showChurnThreatBanner = Boolean(backendResult && backendResult.prediction === "Churn" && backendChurnProbability >= 50);
+  const riskLevel = displayRisk >= 70 ? "High Risk" : displayRisk >= 40 ? "Moderate Risk" : "Low Risk";
+
+  const handleModelPrediction = async () => {
+    setIsLoading(true);
+    setApiError("");
+
+    try {
+      const response = await fetch(`${API_URL}/predict`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          Age: age,
+          Tenure: tenure,
+          "Usage Frequency": usageFrequency,
+          "Support Calls": supportCalls,
+          "Payment Delay": paymentDelay,
+          "Contract Length": contractLength,
+          "Total Spend": totalSpend,
+          "Last Interaction": lastInteraction,
+        }),
+      });
+
+      let errorMessage = "Backend unavailable. Please try again.";
+      let data = null;
+
+      try {
+        data = await response.json();
+      } catch {
+        data = null;
+      }
+
+      if (!response.ok) {
+        if (data?.detail) {
+          if (Array.isArray(data.detail)) {
+            errorMessage = data.detail.map((item) => item.msg).join(" • ");
+          } else if (typeof data.detail === "string") {
+            errorMessage = data.detail;
+          }
+        } else if (data?.error) {
+          errorMessage = data.error;
+        }
+        throw new Error(errorMessage);
+      }
+
+      setBackendResult(data);
+    } catch (error) {
+      setBackendResult(null);
+      setApiError(error.message || "Prediction request failed.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    setAnimateCard(true);
+    const timer = setTimeout(() => setAnimateCard(false), 250);
+    return () => clearTimeout(timer);
+  }, [step]);
+
+  // Initial values are 0 by default, presets can be loaded by clicking row buttons
+
+  useEffect(() => {
+    if (fallbackRisk > 70) {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      let animationId;
+
+      const resizeCanvas = () => {
+        if (!canvas) return;
+        const rect = canvas.parentElement.getBoundingClientRect();
+        canvas.width = rect.width;
+        canvas.height = rect.height;
+      };
+      
+      resizeCanvas();
+      window.addEventListener('resize', resizeCanvas);
+
+      let particles = [];
+      let rockets = [];
+
+      class Rocket {
+        constructor(startX, startY, targetX, targetY, color) {
+          this.x = startX;
+          this.y = startY;
+          this.targetX = targetX;
+          this.targetY = targetY;
+          this.color = color;
+          this.speed = 4;
+          const angle = Math.atan2(targetY - startY, targetX - startX);
+          this.vx = Math.cos(angle) * this.speed;
+          this.vy = Math.sin(angle) * this.speed;
+        }
+        update() {
+          this.x += this.vx;
+          this.y += this.vy;
+          const dist = Math.hypot(this.targetX - this.x, this.targetY - this.y);
+          if (dist < 8) {
+            explode(this.targetX, this.targetY, this.color);
+            return false;
+          }
+          return true;
+        }
+        draw() {
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, 2.5, 0, Math.PI * 2);
+          ctx.fillStyle = this.color;
+          ctx.shadowBlur = 10;
+          ctx.shadowColor = this.color;
+          ctx.fill();
+          ctx.shadowBlur = 0; // reset
+        }
+      }
+
+      class Particle {
+        constructor(x, y, color) {
+          this.x = x;
+          this.y = y;
+          this.color = color;
+          const angle = Math.random() * Math.PI * 2;
+          const speed = Math.random() * 4.5 + 1.5;
+          this.vx = Math.cos(angle) * speed;
+          this.vy = Math.sin(angle) * speed;
+          this.alpha = 1;
+          this.decay = Math.random() * 0.015 + 0.012;
+          this.gravity = 0.06;
+        }
+        update() {
+          this.vy += this.gravity;
+          this.x += this.vx;
+          this.y += this.vy;
+          this.alpha -= this.decay;
+          return this.alpha > 0;
+        }
+        draw() {
+          ctx.save();
+          ctx.globalAlpha = this.alpha;
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, 2, 0, Math.PI * 2);
+          ctx.fillStyle = this.color;
+          ctx.shadowBlur = 6;
+          ctx.shadowColor = this.color;
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+
+      const explode = (x, y, color) => {
+        for (let i = 0; i < 45; i++) {
+          particles.push(new Particle(x, y, color));
+        }
+      };
+
+      const colors = ['#10b981', '#3b82f6', '#f43f5e', '#fbbf24', '#a855f7', '#06b6d4'];
+
+      const render = () => {
+        // Clear frame elegantly
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Keep rockets launching
+        if (Math.random() < 0.05 && rockets.length < 3) {
+          const sX = Math.random() * canvas.width;
+          const sY = canvas.height;
+          const tX = Math.random() * canvas.width;
+          const tY = Math.random() * (canvas.height * 0.5) + 50;
+          const randomColor = colors[Math.floor(Math.random() * colors.length)];
+          rockets.push(new Rocket(sX, sY, tX, tY, randomColor));
+        }
+
+        rockets = rockets.filter(rocket => {
+          const alive = rocket.update();
+          if (alive) rocket.draw();
+          return alive;
+        });
+
+        particles = particles.filter(particle => {
+          const alive = particle.update();
+          if (alive) particle.draw();
+          return alive;
+        });
+
+        animationId = requestAnimationFrame(render);
+      };
+
+      render();
+
+      return () => {
+        window.removeEventListener('resize', resizeCanvas);
+        cancelAnimationFrame(animationId);
+      };
+    }
+  }, [fallbackRisk]);
+
+  const generateRandomID = () => {
+    const num = Math.floor(100 + Math.random() * 900);
+    setCustomerID(`NEW-${num}`);
+    setGroundTruth(-1); 
+  };
+
+  const currentText = TRANSLATIONS[lang] || TRANSLATIONS.En;
+
+  return (
+    <div className="min-h-screen bg-[#d3eae4] text-slate-800 flex items-center justify-center p-4 md:p-8 font-sans relative overflow-hidden">
+      
+      {}
+      {/* Premium Neomorphic & Glassmorphic styles loaded via index.css */}
+
+      {}
+      <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_15%_15%,rgba(255,255,255,0.4),transparent_50%)]" />
+
+        {/* Ring SVGs resembling glassware from Screenshot 2026-07-12 191507.jpg */}
+        <svg className="absolute top-[8%] left-[3%] w-44 h-44 opacity-25 text-white" viewBox="0 0 100 100" fill="currentColor">
+          <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" strokeWidth="2" />
+          <circle cx="50" cy="50" r="30" fill="none" stroke="currentColor" strokeWidth="1" strokeDasharray="3,3" />
+        </svg>
+
+        <svg className="absolute bottom-[6%] left-[10%] w-64 h-64 opacity-20 text-white" viewBox="0 0 100 100" fill="currentColor">
+          <circle cx="50" cy="50" r="48" fill="none" stroke="currentColor" strokeWidth="1.5" />
+          <ellipse cx="50" cy="50" rx="35" ry="15" fill="none" stroke="currentColor" strokeWidth="1" />
+        </svg>
+
+        {/* Ambient mint foliage details */}
+        <svg className="absolute -top-12 -left-12 w-64 h-64 text-[#9fc4ba] opacity-40 transform rotate-45" viewBox="0 0 100 100" fill="currentColor">
+          <path d="M 0,100 C 30,70 40,40 20,20 C 40,40 70,30 100,0 C 70,30 60,60 80,80 C 60,60 30,70 0,100 Z" />
+        </svg>
+
+        <svg className="absolute bottom-10 right-10 w-80 h-80 text-[#8cbcae] opacity-35 transform -rotate-12" viewBox="0 0 100 100" fill="currentColor">
+          <path d="M 0,100 C 40,60 80,70 100,0 C 60,40 70,80 0,100 Z" />
+        </svg>
+      </div>
+
+      {}
+      <div className="relative z-10 w-full max-w-5xl bg-[#eef5f2] soft-panel rounded-3xl overflow-hidden grid grid-cols-1 lg:grid-cols-12 min-h-[660px]">
+        
+        {/* LEFT COLUMN: Input Form Wizard */}
+        <div className="lg:col-span-6 p-6 sm:p-12 flex flex-col justify-between bg-[#eef5f2] rounded-l-3xl relative">
+          
+          {/* Brand header */}
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xl font-bold tracking-tight text-slate-900">
+                {currentText.logoPrefix}<span className="text-[#2da171] font-semibold">{currentText.logoSuffix}</span>
+              </span>
+            </div>
+
+            {/* Language Selector */}
+            <div className="relative">
+              <button 
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+                className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 bg-white/70 hover:bg-white border border-white/80 px-3.5 py-1.5 rounded-full transition shadow-sm"
+              >
+                <span>{lang === 'En' ? '🇺🇸 En' : lang === 'Es' ? '🇪🇸 Es' : '🇫🇷 Fr'}</span>
+                <ChevronDown className="w-3 h-3 text-[#2da171]" />
+              </button>
+
+              {dropdownOpen && (
+                <div className="absolute right-0 mt-2 w-32 bg-white rounded-xl shadow-lg border border-slate-100 overflow-hidden z-50 p-1">
+                  <button 
+                    onClick={() => { setLang('En'); setDropdownOpen(false); }}
+                    className="w-full text-left px-3 py-2 text-xs font-medium hover:bg-slate-50 hover:text-[#2da171] text-slate-700 block rounded-lg transition"
+                  >
+                    🇺🇸 English
+                  </button>
+                  <button 
+                    onClick={() => { setLang('Es'); setDropdownOpen(false); }}
+                    className="w-full text-left px-3 py-2 text-xs font-medium hover:bg-slate-50 hover:text-[#2da171] text-slate-700 block rounded-lg transition"
+                  >
+                    🇪🇸 Español
+                  </button>
+                  <button 
+                    onClick={() => { setLang('Fr'); setDropdownOpen(false); }}
+                    className="w-full text-left px-3 py-2 text-xs font-medium hover:bg-slate-50 hover:text-[#2da171] text-slate-700 block rounded-lg transition"
+                  >
+                    🇫🇷 Français
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className={`flex-grow flex flex-col justify-center transition-all duration-300 ${animateCard ? 'opacity-85 scale-[0.99]' : 'opacity-100 scale-100'}`}>
+            
+            {/* Stage Title Area */}
+            <div className="text-center mb-6">
+              <h2 className="text-3xl font-bold tracking-tight text-slate-900 mb-1.5">
+                {step === 5 ? currentText.resultTitle : currentText.greeting}
+              </h2>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
+                {step === 5 
+                  ? "Evaluating model predictions on the complete feature index: Customer ID, Tenure, Billing, and interactive usage metrics."
+                  : currentText.subtitle
+                }
+              </p>
+            </div>
+
+            {/* Process Dots */}
+            <div className="bg-[#e2ede8] p-1 rounded-full flex justify-between items-center gap-2 mb-6 max-w-[280px] mx-auto w-full shadow-inner">
+              {[1, 2, 3, 4, 5].map((s) => (
+                <div 
+                  key={s} 
+                  className={`h-2 rounded-full flex-1 transition-all duration-300 ${
+                    step === s 
+                      ? 'bg-gradient-to-r from-emerald-500 to-teal-500' 
+                      : step > s 
+                        ? 'bg-emerald-600' 
+                        : 'bg-transparent'
+                  }`} 
+                />
+              ))}
+            </div>
+
+            {/* STEP 1: Core Profile Characteristics */}
+            {step === 1 && (
+              <div className="space-y-4">
+                <div>
+                  <div className="flex justify-between items-center mb-1.5 pl-0.5">
+                    <label className="text-xs font-bold text-slate-600 block">
+                      CustomerID
+                    </label>
+                    <button 
+                      type="button" 
+                      onClick={generateRandomID} 
+                      className="text-[10px] text-[#2da171] hover:underline font-bold"
+                    >
+                      Randomize ID
+                    </button>
+                  </div>
+                  <div className="spa-input-inset rounded-xl px-4 py-3 flex items-center gap-2">
+                    <User className="w-4 h-4 text-slate-400" />
+                    <input 
+                      type="text"
+                      value={customerID}
+                      onChange={(e) => {
+                        setCustomerID(e.target.value);
+                        setGroundTruth(-1); 
+                      }}
+                      className="w-full bg-transparent text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold text-slate-600 block mb-1.5 pl-0.5">Gender</label>
+                    <div className="spa-input-inset rounded-xl px-2 py-1.5">
+                      <select
+                        value={gender}
+                        onChange={(e) => setGender(e.target.value)}
+                        className="w-full bg-transparent text-xs font-medium text-slate-700 focus:outline-none cursor-pointer p-1.5"
+                      >
+                        <option value="0">0</option>
+                        <option value="Female">Female</option>
+                        <option value="Male">Male</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-600 block mb-1.5 pl-0.5">Age ({age} yrs)</label>
+                    <div className="pt-3 px-1">
+                      <input 
+                        type="range"
+                        min="0"
+                        max="85"
+                        value={age}
+                        onChange={(e) => setAge(parseInt(e.target.value))}
+                        className="w-full spa-slider h-1.5 bg-transparent rounded-lg cursor-pointer appearance-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* STEP 2: Service Plan & Account Age */}
+            {step === 2 && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold text-slate-600 block mb-1.5 pl-0.5">Subscription Type</label>
+                    <div className="spa-input-inset rounded-xl px-2 py-1.5">
+                      <select
+                        value={subscriptionType}
+                        onChange={(e) => setSubscriptionType(e.target.value)}
+                        className="w-full bg-transparent text-xs font-medium text-slate-700 focus:outline-none cursor-pointer p-1.5"
+                      >
+                        <option value="0">0</option>
+                        <option value="Basic">Basic Tier</option>
+                        <option value="Standard">Standard Tier</option>
+                        <option value="Premium">Premium Tier</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-slate-600 block mb-1.5 pl-0.5">Contract Length</label>
+                    <div className="spa-input-inset rounded-xl px-2 py-1.5">
+                      <select
+                        value={contractLength}
+                        onChange={(e) => setContractLength(e.target.value)}
+                        className="w-full bg-transparent text-xs font-medium text-slate-700 focus:outline-none cursor-pointer p-1.5"
+                      >
+                        <option value="0">0</option>
+                        <option value="Monthly">Monthly Cycle</option>
+                        <option value="Quarterly">Quarterly Cycle</option>
+                        <option value="Annual">Annual Terms</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex justify-between items-center mb-1 px-0.5">
+                    <label className="text-xs font-bold text-slate-600">Tenure</label>
+                    <span className="text-xs font-mono font-bold text-emerald-600">{tenure} months</span>
+                  </div>
+                  <div className="pt-3 px-1">
+                    <input 
+                      type="range"
+                      min="0"
+                      max="72"
+                      value={tenure}
+                      onChange={(e) => setTenure(parseInt(e.target.value))}
+                      className="w-full spa-slider h-1.5 bg-transparent rounded-lg cursor-pointer appearance-none"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* STEP 3: Engagement Telemetry */}
+            {step === 3 && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <div className="flex justify-between items-center mb-1 px-0.5">
+                      <label className="text-xs font-bold text-slate-600">Usage Frequency</label>
+                      <span className="text-xs font-mono font-bold text-emerald-600">{usageFrequency} logins</span>
+                    </div>
+                    <div className="pt-3">
+                      <input 
+                        type="range"
+                        min="0"
+                        max="30"
+                        value={usageFrequency}
+                        onChange={(e) => setUsageFrequency(parseInt(e.target.value))}
+                        className="w-full spa-slider h-1.5 bg-transparent rounded-lg cursor-pointer appearance-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between items-center mb-1 px-0.5">
+                      <label className="text-xs font-bold text-slate-600">Support Calls</label>
+                      <span className="text-xs font-mono font-bold text-rose-600">{supportCalls} tickets</span>
+                    </div>
+                    <div className="pt-3">
+                      <input 
+                        type="range"
+                        min="0"
+                        max="10"
+                        value={supportCalls}
+                        onChange={(e) => setSupportCalls(parseInt(e.target.value))}
+                        className="w-full spa-slider h-1.5 bg-transparent rounded-lg cursor-pointer appearance-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex justify-between items-center mb-1 px-0.5">
+                    <label className="text-xs font-bold text-slate-600">Last Interaction</label>
+                    <span className="text-xs font-mono font-bold text-emerald-600">{lastInteraction} days ago</span>
+                  </div>
+                  <div className="pt-3 px-1">
+                    <input 
+                      type="range"
+                      min="0"
+                      max="30"
+                      value={lastInteraction}
+                      onChange={(e) => setLastInteraction(parseInt(e.target.value))}
+                      className="w-full spa-slider h-1.5 bg-transparent rounded-lg cursor-pointer appearance-none"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* STEP 4: Financial Audit */}
+            {step === 4 && (
+              <div className="space-y-4">
+                <div>
+                  <div className="flex justify-between items-center mb-1 px-0.5">
+                    <label className="text-xs font-bold text-slate-600">Total Spend</label>
+                    <span className="text-xs font-mono font-bold text-emerald-600">${totalSpend} USD</span>
+                  </div>
+                  <div className="pt-3 px-1">
+                    <input 
+                      type="range"
+                      min="0"
+                      max="2000"
+                      step="5"
+                      value={totalSpend}
+                      onChange={(e) => setTotalSpend(parseInt(e.target.value))}
+                      className="w-full spa-slider h-1.5 bg-transparent rounded-lg cursor-pointer appearance-none"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex justify-between items-center mb-1 px-0.5">
+                    <label className="text-xs font-bold text-slate-600">Payment Delay</label>
+                    <span className="text-xs font-mono font-bold text-rose-500">{paymentDelay} days late</span>
+                  </div>
+                  <div className="pt-3 px-1">
+                    <input 
+                      type="range"
+                      min="0"
+                      max="30"
+                      value={paymentDelay}
+                      onChange={(e) => setPaymentDelay(parseInt(e.target.value))}
+                      className="w-full spa-slider h-1.5 bg-transparent rounded-lg cursor-pointer appearance-none"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* STEP 5: Final Result Predictions & Explanation Weights */}
+            {step === 5 && (
+              <div className="space-y-4 animate-scaleUp">
+                
+                {/* Neumorphic Prediction Output */}
+                 <div className={`p-5 flex flex-col items-center justify-center text-center rounded-2xl transition-all duration-300 ${
+                   displayRisk > 70 
+                     ? 'spa-card-inset-warning' 
+                     : displayRisk > 40 
+                       ? 'spa-card-inset' 
+                       : 'spa-card-inset-success'
+                 }`}>
+                  <span className="text-[10px] uppercase font-extrabold tracking-widest text-slate-500 mb-1">
+                    Prediction
+                  </span>
+
+                  <div className={`text-3xl font-black font-mono transition-colors duration-500 mb-2 ${
+                    displayPredictionClass === 1 ? "text-rose-600" : "text-emerald-600"
+                  }`}>
+                    {displayPredictionClass === 1 ? "❌ Customer will Churn" : "✅ Customer will Stay"}
+                  </div>
+
+                  <div className="text-[10px] uppercase font-extrabold tracking-widest text-slate-500 mb-1">
+                    Confidence
+                  </div>
+                  <div className="text-2xl font-black font-mono text-slate-900 mb-2">
+                    {backendResult ? `${backendResult.confidence.toFixed(2)}%` : `${displayRisk}%`}
+                  </div>
+
+                  <div className="text-[10px] uppercase font-extrabold tracking-widest text-slate-500 mb-1">
+                    Risk
+                  </div>
+                  <div className="text-sm font-bold text-slate-800 mb-3">
+                    {riskLevel}
+                  </div>
+
+                  {apiError && (
+                    <div className="mt-2 text-[10px] text-rose-600 font-semibold">{apiError}</div>
+                  )}
+
+                  {groundTruth !== -1 && (
+                    <div className="mt-3 pt-2.5 border-t border-slate-300/40 w-full flex items-center justify-center gap-2">
+                      <span className="text-[10px] font-semibold text-slate-500">True Label:</span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                        groundTruth === displayPredictionClass 
+                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' 
+                          : 'bg-amber-100 text-amber-800 border border-amber-200'
+                      }`}>
+                        {groundTruth === 1 ? 'Churn (1)' : 'Loyal (0)'} 
+                        {groundTruth === displayPredictionClass ? ' (Match ✓)' : ' (Mismatch)'}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {backendResult && (
+                  <div className="space-y-3 bg-[#eef5f2] border border-white/80 p-3.5 rounded-xl shadow-sm">
+                    <div>
+                      <div className="flex justify-between text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                        <span>Stay Probability</span>
+                        <span>{backendResult.stay_probability.toFixed(2)}%</span>
+                      </div>
+                      <div className="w-full h-2.5 rounded-full bg-slate-200 overflow-hidden">
+                        <div className="h-full rounded-full bg-emerald-500" style={{ width: `${backendResult.stay_probability}%` }}></div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                        <span>Churn Probability</span>
+                        <span>{backendResult.churn_probability.toFixed(2)}%</span>
+                      </div>
+                      <div className="w-full h-2.5 rounded-full bg-slate-200 overflow-hidden">
+                        <div className="h-full rounded-full bg-rose-500" style={{ width: `${backendResult.churn_probability}%` }}></div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Micro Weights Analytics */}
+                <div className="space-y-1.5">
+                  <span className="text-[10px] uppercase font-bold tracking-widest text-slate-500 block pl-0.5">
+                    Trigger Diagnostics
+                  </span>
+
+                  <div className="bg-[#e8f1ed] border border-white p-3 rounded-xl text-[11px] leading-relaxed text-slate-600 shadow-sm space-y-1">
+                    <p className="flex items-start gap-1.5">
+                      <span className="text-emerald-600 font-bold">•</span> 
+                      <span>Cycle: <strong>{contractLength}</strong> with <strong>${totalSpend}</strong> spent over <strong>{tenure}</strong> months.</span>
+                    </p>
+                    <p className="flex items-start gap-1.5">
+                      <span className="text-emerald-600 font-bold">•</span> 
+                      <span>Friction: <strong>{supportCalls}</strong> support calls with average delays of <strong>{paymentDelay} days</strong>.</span>
+                    </p>
+                  </div>
+                </div>
+
+              </div>
+            )}
+
+            {/* Wizard Steps Trigger Button */}
+            <div className="mt-6 flex gap-3">
+              {step > 1 && (
+                <button
+                  type="button"
+                  onClick={() => setStep(prev => prev - 1)}
+                  className="px-5 py-3 spa-btn-outline rounded-xl text-xs font-bold text-slate-600 flex items-center justify-center gap-1.5"
+                >
+                  {currentText.backStep}
+                </button>
+              )}
+
+              {step < 4 ? (
+                <button
+                  type="button"
+                  onClick={() => setStep(prev => prev + 1)}
+                  className="flex-1 py-3.5 bg-slate-950 hover:bg-slate-900 active:scale-95 text-white shadow-lg rounded-xl text-xs font-extrabold tracking-wide flex items-center justify-center gap-2 transition-all"
+                >
+                  <span>{currentText.nextStep}</span>
+                  <ArrowRight className="w-4 h-4 text-emerald-400" />
+                </button>
+              ) : step === 4 ? (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await handleModelPrediction();
+                    setStep(5);
+                  }}
+                  disabled={isLoading}
+                  className="flex-1 py-3.5 bg-slate-950 hover:bg-slate-900 active:scale-95 text-white shadow-lg rounded-xl text-xs font-extrabold tracking-wide flex items-center justify-center gap-2 transition-all disabled:opacity-70"
+                >
+                  <span>{isLoading ? "Evaluating..." : currentText.calculate}</span>
+                  <Sparkles className="w-4 h-4 text-emerald-400" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setStep(1)}
+                  className="flex-1 py-3.5 bg-slate-950 hover:bg-slate-900 active:scale-95 text-white shadow-lg rounded-xl text-xs font-extrabold tracking-wide flex items-center justify-center gap-2 transition-all"
+                >
+                  <RotateCcw className="w-4 h-4 text-emerald-400" />
+                  <span>{currentText.reset}</span>
+                </button>
+              )}
+            </div>
+
+            <div className="mt-6 text-center text-[11px] text-slate-400 tracking-wide">
+              <span>{currentText.contactSupport} </span>
+              <a href="mailto:support@bontelco.com" className="text-[#2da171] hover:underline font-semibold ml-0.5">
+                support@bontelco.com
+              </a>
+            </div>
+
+          </div>
+
+          <div className="mt-5 text-center text-[10px] text-slate-300 tracking-wider">
+            {currentText.allRights}
+          </div>
+
+        </div>
+
+        {/* RIGHT COLUMN: Glassmorphic Board with dynamic Easter Egg + Canvas Fireworks! */}
+        <div className="lg:col-span-6 relative flex items-center justify-center p-6 md:p-12 overflow-hidden bg-[#e2ece9] rounded-r-3xl">
+          
+          {/* Detailed background foliage mimicking Screenshot 2026-07-12 191507.jpg */}
+          <div className="absolute inset-0 pointer-events-none z-0 scale-105 select-none">
+            <svg className="absolute bottom-0 right-0 w-full h-full text-[#387e63]/25 opacity-90" viewBox="0 0 400 400" fill="currentColor">
+              <path d="M 400,400 C 310,380 200,280 180,200 C 140,110 210,50 320,100 C 370,120 400,250 400,400 Z" />
+              <path d="M 280,350 C 230,270 120,240 60,180 C 120,150 190,180 250,230 C 290,260 300,320 280,350 Z" />
+              <path d="M 200,400 C 140,320 80,250 0,220 C 40,180 110,210 160,260 C 210,310 220,370 200,400 Z" />
+              
+              <path d="M 180,200 L 400,400" stroke="#235c46" strokeWidth="2" strokeLinecap="round" className="opacity-40" />
+              <path d="M 230,250 C 250,220 280,200 300,190" stroke="#235c46" strokeWidth="1.5" className="opacity-30" />
+            </svg>
+            <span className="absolute top-[20%] right-[15%] w-3 h-3 rounded-full bg-emerald-300 blur-[1px] opacity-70" />
+            <span className="absolute bottom-[25%] right-[40%] w-2 h-2 rounded-full bg-emerald-400 opacity-60" />
+          </div>
+
+          {}
+          {/* Canvas overlay for fireworks */}
+          {showChurnThreatBanner && (
+            <canvas 
+              ref={canvasRef} 
+              className="absolute inset-0 z-20 pointer-events-none"
+            />
+          )}
+
+          {/* Glassmorphic Panel Content */}
+          <div className="relative z-10 w-full max-w-sm bg-white/45 backdrop-blur-xl rounded-3xl p-6 md:p-8 shadow-[10px_20px_40px_rgba(12,42,35,0.06)] border border-white/60 hover:scale-[1.01] transition-transform duration-500 flex flex-col gap-5">
+            
+            {/* Upper-left rotating loading element from Screenshot 2026-07-12 191507.jpg */}
+            <div className="relative w-12 h-12 flex items-center justify-center">
+              <div className="absolute inset-0 rounded-full border-[3px] border-slate-400/20" />
+              <div className={`absolute inset-0 rounded-full border-[3px] ${
+                showChurnThreatBanner
+                  ? 'border-t-rose-500 border-r-rose-400' 
+                  : 'border-t-emerald-600 border-r-emerald-600/40'
+              } border-b-transparent border-l-transparent animate-spin`} />
+              <div className={`w-1.5 h-1.5 ${showChurnThreatBanner ? 'bg-rose-500' : 'bg-emerald-600'} rounded-full`} />
+            </div>
+
+            {/* Easter Egg Logic Content */}
+            {showChurnThreatBanner ? (
+              <div className="space-y-3.5 text-slate-900 animate-pulse">
+                <div className="flex items-center gap-2">
+                  <AlertOctagon className="w-6 h-6 text-rose-600 animate-bounce" />
+                  <span className="text-xs uppercase font-extrabold tracking-widest text-rose-600">
+                    Retention Threat Level Max
+                  </span>
+                </div>
+                <h3 className="text-3xl font-black tracking-tight leading-none text-rose-700 font-serif drop-shadow-sm">
+                  Bhag Jega Bhadwa 🏃‍♂️💨
+                </h3>
+                <p className="text-xs text-rose-950 font-semibold leading-relaxed">
+                  Backend churn probability is <strong>{backendChurnProbability.toFixed(2)}%</strong>. Run retention protocols immediately before they escape the platform!
+                </p>
+                {/* Visual firework indicator text */}
+                <div className="text-[10px] font-bold text-[#10b981] uppercase tracking-wider flex items-center gap-1 mt-2">
+                  <Sparkles className="w-3.5 h-3.5 text-yellow-500 animate-spin" /> Nice Fireworks active!
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3.5 text-slate-900">
+                <h3 className="text-xl font-bold tracking-tight leading-snug">
+                  {currentText.glassTitle}
+                </h3>
+                <p className="text-xs text-slate-600/90 leading-relaxed font-medium">
+                  {currentText.glassSub}
+                </p>
+              </div>
+            )}
+
+            <div className="pt-4 border-t border-slate-300/40 grid grid-cols-2 gap-3 text-center">
+              <div className="bg-white/50 rounded-xl p-2.5 border border-white/40">
+                <span className="text-[9px] uppercase font-bold text-slate-500 block">Classifier</span>
+                <span className="text-[11px] font-mono font-bold text-slate-700">Logistic-Sigmoid</span>
+              </div>
+              <div className="bg-white/50 rounded-xl p-2.5 border border-white/40">
+                <span className="text-[9px] uppercase font-bold text-slate-500 block">F1 Accuracy</span>
+                <span className="text-[11px] font-mono font-bold text-slate-700">89.2% Calibrated</span>
+              </div>
+            </div>
+
+          </div>
+
+          <div className="absolute -bottom-20 -right-20 w-64 h-64 bg-gradient-to-tr from-white/20 to-transparent rounded-full border border-white/20 blur-[2px]" />
+
+        </div>
+
+      </div>
+
+    </div>
+  );
+}

@@ -1,0 +1,140 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Outfit', sans-serif;
+  }
+}
+
+/* Enhanced Neumorphism UI Utility Classes */
+.soft-panel {
+  background: #eef5f2;
+  box-shadow: 20px 20px 40px #b2c9c3, -20px -20px 40px #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+}
+
+.spa-input-inset {
+  background: #eef5f2;
+  box-shadow: inset 4px 4px 8px #cbdad4, inset -4px -4px 8px #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.spa-input-inset:focus-within {
+  background: #ffffff;
+  box-shadow: inset 2px 2px 4px #d1e2dc, inset -2px -2px 4px #ffffff, 0 0 0 3px rgba(45, 161, 113, 0.2);
+  border-color: rgba(45, 161, 113, 0.4);
+}
+
+.spa-btn-outline {
+  background: #eef5f2;
+  box-shadow: 4px 4px 8px #cbdad4, -4px -4px 8px #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.spa-btn-outline:hover {
+  background: #f4faf7;
+  box-shadow: 2px 2px 4px #cbdad4, -2px -2px 4px #ffffff;
+  transform: translateY(-1.5px);
+}
+
+.spa-btn-outline:active {
+  box-shadow: inset 3px 3px 6px #cbdad4, inset -3px -3px 6px #ffffff;
+  transform: translateY(0);
+}
+
+/* Raised Neomorphic Preset Button */
+.spa-preset-btn {
+  background: #eef5f2;
+  box-shadow: 3px 3px 6px #cbdad4, -3px -3px 6px #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.spa-preset-btn:hover {
+  background: #f4faf7;
+  box-shadow: 2px 2px 4px #cbdad4, -2px -2px 4px #ffffff;
+  transform: translateY(-1px);
+}
+
+/* Pressed Neomorphic Preset Button */
+.spa-preset-btn-active {
+  background: #e4efe9;
+  box-shadow: inset 4px 4px 8px #c3d4cc, inset -4px -4px 8px #ffffff;
+  border: 1px solid rgba(45, 161, 113, 0.35);
+  color: #1e6c4b;
+  font-weight: 700;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Neomorphic Sliders */
+.spa-slider::-webkit-slider-runnable-track {
+  background: #e1ede8;
+  box-shadow: inset 2px 2px 5px #c3d4ce, inset -2px -2px 5px #ffffff;
+  border-radius: 9999px;
+  height: 8px;
+}
+
+.spa-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  background: #2da171;
+  box-shadow: 3px 3px 7px #98b0a7, -3px -3px 7px #ffffff;
+  border: 2px solid #ffffff;
+  height: 22px;
+  width: 22px;
+  border-radius: 50%;
+  margin-top: -7px;
+  cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), background-color 0.15s ease;
+}
+
+.spa-slider::-webkit-slider-thumb:hover {
+  background: #24815a;
+  transform: scale(1.15);
+}
+
+.spa-slider::-webkit-slider-thumb:active {
+  background: #1c6446;
+  transform: scale(1.25);
+}
+
+/* Neomorphic Card Panel Inset Shadow (for step 5 result container) */
+.spa-card-inset {
+  background: #e6f0fa;
+  box-shadow: inset 6px 6px 12px #c2d4e5, inset -6px -6px 12px #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+}
+
+.spa-card-inset-warning {
+  background: #fdf2f4;
+  box-shadow: inset 6px 6px 12px #ecd7db, inset -6px -6px 12px #ffffff;
+  border: 1px solid rgba(244, 63, 94, 0.15);
+}
+
+.spa-card-inset-success {
+  background: #f0fdf4;
+  box-shadow: inset 6px 6px 12px #daf2e1, inset -6px -6px 12px #ffffff;
+  border: 1px solid rgba(16, 185, 129, 0.15);
+}
+
+@keyframes scaleUp {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-scaleUp {
+  animation: scaleUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
