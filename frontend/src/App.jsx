@@ -92,7 +92,7 @@ export default function App() {
   const [supportCalls, setSupportCalls] = useState(0);
   const [paymentDelay, setPaymentDelay] = useState(0);
   const [subscriptionType, setSubscriptionType] = useState("0");
-  const [contractLength, setContractLength] = useState("0");
+  const [contractLength, setContractLength] = useState("Monthly");
   const [totalSpend, setTotalSpend] = useState(0);
   const [lastInteraction, setLastInteraction] = useState(0);
   
@@ -189,8 +189,10 @@ export default function App() {
         throw new Error(errorMessage);
       }
 
+      console.log("✅ Backend response:", data);
       setBackendResult(data);
     } catch (error) {
+      console.error("❌ Prediction error:", error);
       setBackendResult(null);
       setApiError(error.message || "Prediction request failed.");
     } finally {
@@ -199,15 +201,15 @@ export default function App() {
   };
 
   useEffect(() => {
-    setAnimateCard(true);
-    const timer = setTimeout(() => setAnimateCard(false), 250);
-    return () => clearTimeout(timer);
-  }, [step]);
+    console.log("🎯 showChurnThreatBanner changed:", showChurnThreatBanner);
+    console.log("📊 backendResult:", backendResult);
+    console.log("🔢 backendChurnProbability:", backendChurnProbability);
+  }, [showChurnThreatBanner, backendResult, backendChurnProbability]);
 
   // Initial values are 0 by default, presets can be loaded by clicking row buttons
 
   useEffect(() => {
-    if (fallbackRisk > 70) {
+    if (showChurnThreatBanner) {
       const canvas = canvasRef.current;
       if (!canvas) return;
       const ctx = canvas.getContext('2d');
@@ -298,7 +300,7 @@ export default function App() {
         }
       };
 
-      const colors = ['#10b981', '#3b82f6', '#f43f5e', '#fbbf24', '#a855f7', '#06b6d4'];
+      const colors = ['#f43f5e', '#fbbf24', '#a855f7', '#06b6d4', '#10b981', '#3b82f6'];
 
       const render = () => {
         // Clear frame elegantly
@@ -336,7 +338,7 @@ export default function App() {
         cancelAnimationFrame(animationId);
       };
     }
-  }, [fallbackRisk]);
+  }, [showChurnThreatBanner]);
 
   const generateRandomID = () => {
     const num = Math.floor(100 + Math.random() * 900);
@@ -902,6 +904,13 @@ export default function App() {
                 <p className="text-xs text-slate-600/90 leading-relaxed font-medium">
                   {currentText.glassSub}
                 </p>
+                {backendResult && (
+                  <div className="mt-3 p-2 bg-slate-100 rounded text-[9px] font-mono text-slate-600 border border-slate-200">
+                    <div><strong>Prediction:</strong> {backendResult.prediction}</div>
+                    <div><strong>Churn %:</strong> {backendChurnProbability.toFixed(2)}%</div>
+                    <div><strong>Confidence:</strong> {backendResult.confidence.toFixed(2)}%</div>
+                  </div>
+                )}
               </div>
             )}
 
